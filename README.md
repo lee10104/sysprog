@@ -1,5 +1,5 @@
-# sysprog
+# System Programming
 
 2015.Fall
 
-System Programming
+Prof. Bernhard Egger
