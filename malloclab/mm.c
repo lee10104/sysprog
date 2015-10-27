@@ -24,9 +24,9 @@
  ********************************************************/
 student_t student = {
   /* Your full name */
-  "FirstName LastName",
+  "Eunha Lee",
   /* Your student ID */
-  "2015-00000",
+  "2013-11422",
 };
 
 /* DON'T MODIFY THIS VALUE AND LEAVE IT AS IT WAS */
