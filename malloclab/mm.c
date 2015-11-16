@@ -105,6 +105,9 @@ void handle_double_free(void) {
 
 static void *coalesce(void *bp)
 {
+  /* Debugging */
+  printf("coalesce\n");
+
   size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
   size_t next_alloc = GET_ALLOC(FTRP(NEXT_BLKP(bp)));
   size_t size = GET_SIZE(HDRP(bp));
@@ -137,6 +140,9 @@ static void *coalesce(void *bp)
 
 static void *extend_heap(size_t words)
 {
+  /* Debugging */
+  printf("extend_heap\n");
+
   char *bp;
   size_t size;
 
@@ -163,12 +169,17 @@ int mm_init(range_t **ranges)
   /* Create the initial empty heap */
   if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
     return -1;
+     
   PUT(heap_listp, 0);                             /* Alginment padding */
   PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1));  /* Prologue header */
   PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1));  /* Prologue footer */
   PUT(heap_listp + (3 * WSIZE), PACK(0, 1));      /* Epilogue header */
   heap_listp += (2 * WSIZE);
+ 
+  /* Debugging */
+  printf("heap_listp: %p\n", heap_listp);
   
+
   /* Extend the empty heap with a free block of CHUNKSIZE bytes */
   if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
       return -1;
@@ -181,22 +192,38 @@ int mm_init(range_t **ranges)
 
 static void *find_fit(size_t asize)
 {
-  char *ptr;
+  /* Debugging */
+  printf("find_fit\n");
 
-  ptr = heap_listp + 2 * WSIZE;
+  char *bp;
 
-  while (GET(FTRP(ptr) + WSIZE) != PACK(0, 1))
+  bp = heap_listp;
+
+  while (GET_SIZE(HDRP(bp)) != 0)
   {
-    if (GET_SIZE(HDRP(ptr)) >= asize)
-      return ptr;
-    ptr = NEXT_BLKP(ptr);
+    printf("current bp: %p\n", HDRP(bp));
+    if (GET_SIZE(HDRP(bp)) >= asize)
+      return bp;
+    bp = NEXT_BLKP(bp);
   }
   return NULL;
 }
 
 static void place(void *bp, size_t asize)
 {
-  PUT(bp + asize * WSIZE, PACK(GET_SIZE(HDRP(bp)) - asize, 1));
+  /* Debugging */
+  printf("place\n");
+
+  size_t temp;
+
+  temp = GET_SIZE(HDRP(bp));
+
+  PUT(HDRP(bp), PACK(asize, 1));
+  PUT(FTRP(bp), PACK(DSIZE, 1));
+  
+  bp = NEXT_BLKP(bp);
+
+  PUT(HDRP(bp), PACK(temp - asize, 1));
 }
 
 /*
@@ -205,9 +232,15 @@ static void place(void *bp, size_t asize)
  */
 void* mm_malloc(size_t size)
 {
+  /* Debugging */
+  printf("mm_malloc\n");
+
   size_t asize;       /* Adjusted block size */
   size_t extendsize;  /* Amou nt to extend heap if no fit */
   char *bp;
+
+  /* Debugging */
+  printf("malloc start!\n");
 
   /* Ignore spurious requests */
   if (size == 0)
@@ -223,6 +256,10 @@ void* mm_malloc(size_t size)
   if ((bp = find_fit(asize)) != NULL)
   {
     place(bp, asize);
+
+    /* Debugging */
+    printf("found free list for a fit, malloc finish!\n");
+
     return bp;
   }
 
@@ -231,6 +268,11 @@ void* mm_malloc(size_t size)
   if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
     return NULL;
   place(bp, asize);
+ 
+  /* Debugging */
+  printf("no fit found, new heap. malloc finish!\n");
+  printf("bp: %p\n", bp);
+
   return bp;
 }
 
@@ -239,6 +281,9 @@ void* mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
+  /* Debugging */
+  printf("mm_free\n");
+
   /* YOUR IMPLEMENTATION */
   size_t size = GET_SIZE(HDRP(ptr));
 
@@ -264,5 +309,18 @@ void* mm_realloc(void *ptr, size_t t)
  */
 void mm_exit(void)
 {
+  /* Debugging */
+  printf("mm_exit\n");
+
+  char *bp;
+
+  bp = heap_listp;
+
+  while (GET_SIZE(HDRP(bp)) != 0)
+  {
+    printf("current bp: %p\n", HDRP(bp));
+    mm_free(bp);
+    bp = NEXT_BLKP(bp);
+  }
 }
 
