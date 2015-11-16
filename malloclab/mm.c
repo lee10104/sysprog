@@ -201,9 +201,14 @@ static void *find_fit(size_t asize)
 
   while (GET_SIZE(HDRP(bp)) != 0)
   {
-    printf("current bp: %p\n", HDRP(bp));
-    if (GET_SIZE(HDRP(bp)) >= asize)
-      return bp;
+    if (!GET_ALLOC(FTRP(bp)))
+    {
+      printf("current bp: %p\n", HDRP(bp));
+      printf("block size: %u\n", GET_SIZE(HDRP(bp)));
+      printf("asize: %u\n", asize);
+      if (GET_SIZE(HDRP(bp)) >= asize)
+        return bp;
+    }
     bp = NEXT_BLKP(bp);
   }
   return NULL;
@@ -318,9 +323,12 @@ void mm_exit(void)
 
   while (GET_SIZE(HDRP(bp)) != 0)
   {
-    printf("current bp: %p\n", HDRP(bp));
-    mm_free(bp);
-    bp = NEXT_BLKP(bp);
+    if (GET_ALLOC(FTRP(bp)))
+    {
+      printf("current bp: %p\n", HDRP(bp));
+      mm_free(bp);
+      bp = NEXT_BLKP(bp);
+    }
   }
 }
 
