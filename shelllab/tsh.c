@@ -188,9 +188,9 @@ void eval(char *cmdline)
   if (argv[0] == NULL)
     return;
 
-  if (!builtin_command(argv))
+  if (!builtin_cmd(argv))
   {
-    if ((pid = Fork()) == 0)
+    if ((pid = fork()) == 0)
     {
       if (execve(argv[0], argv, environ) < 0)
       {
@@ -287,54 +287,32 @@ int builtin_cmd(char **argv)
   return 0;     /* not a builtin command */
 }
 
-int powthem(int a, int b)
-{
-  int i;
-  int result = 1;
-
-  for (i = 0; i < b; i++)
-    result *= a;
-
-  return result;
-}
-
 /*
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char **argv)
 {
-  int i;
-  int len;
   int jid = 0;
   int pid = 0;
-  char *idc;
 
   if (argv[1][0] == '%')
   {
-    strcpy(idc, argv[1]);
-    len = strlen(idc);
-    len--;
-    
-    for (i = 0; i < len; i++)
-      jid += powthem((idc[len - i] - '0'), i);
-
+    argv[1][0] = ' ';
+    jid = atoi(argv[1]);
     pid = getjobjid(jobs, jid)->pid;
   }
   else
-  {
-    strcpy(idc, argv[1]);
-    len = strlen(idc);
+    pid = atoi(argv[1]);
 
-    for (i = 0; i < len; i++)
-      pid += powthem((idc[len - i - 1] - '0'), i);
-  }
-
-  KILL(pid, SIGCONT);
+  kill(-pid, SIGCONT);
 
   if (strcmp(argv[0], "bg") == 0)
     getjobpid(jobs, pid)->state = BG;
   else if (strcmp(argv[0], "fg") == 0)
+  {
     getjobpid(jobs, pid)->state = FG;
+    waitfg(pid);
+  }
 
   waitpid(pid, NULL, 0);
   return;
@@ -345,9 +323,8 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-  int status;
-
-  waitpid(pid, &status, 0);
+  if (getjobpid(jobs, pid)->state == FG)
+    sleep(1);
 
   return;
 }
@@ -375,7 +352,7 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig)
 {
-  KILL(fgpid(jobs), SIGINT);
+  kill(-fgpid(jobs), SIGINT);
   return;
 }
 
@@ -386,7 +363,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig)
 {
-  KILL(fgpid(jobs), SIGTSTP);
+  kill(-fgpid(jobs), SIGTSTP);
   return;
 }
 
