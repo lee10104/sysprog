@@ -182,16 +182,24 @@ void eval(char *cmdline)
   char buf[MAXLINE];
   int isbg;
   pid_t pid;
+  sigset_t sigset;
 
   strcpy(buf, cmdline);
   isbg = parseline(buf, argv);
   if (argv[0] == NULL)
     return;
 
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGCHLD);
+  sigprocmask(SIG_BLOCK, &sigset, NULL);
+  
   if (!builtin_cmd(argv))
   {
     if ((pid = fork()) == 0)
     {
+      setpgid(0, 0);
+      sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+
       if (execve(argv[0], argv, environ) < 0)
       {
         printf("%s: Command not found.\n", argv[0]);
@@ -199,15 +207,18 @@ void eval(char *cmdline)
       }
     }
 
-    if (isbg == 1)
-      addjob(jobs, pid, BG, cmdline);
-    else
-      addjob(jobs, pid, FG, cmdline);
+    sigprocmask(SIG_UNBLOCK, &sigset, NULL);
 
     if (isbg == 0)
+    {
+      addjob(jobs, pid, FG, cmdline);
       waitfg(pid);
+    }
     else
+    {
+      addjob(jobs, pid, BG, cmdline);
       printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
+    }
   }
 
   return;
@@ -283,7 +294,7 @@ int builtin_cmd(char **argv)
     listjobs(jobs);
     return 1;
   }
-  else if (strcmp(argv[0], "bg") == 0 || strcmp(argv[0], "fg") == 0)
+  else if ((strcmp(argv[0], "bg") == 0) || (strcmp(argv[0], "fg") == 0))
   {
     do_bgfg(argv);
     return 1;
@@ -298,6 +309,7 @@ int builtin_cmd(char **argv)
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char **argv)
+
 {
   int jid = 0;
   int pid = 0;
@@ -326,7 +338,10 @@ void do_bgfg(char **argv)
     return;
 
   if (strcmp(argv[0], "bg") == 0)
+  {
     job->state = BG;
+    printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
+  }
   else if (strcmp(argv[0], "fg") == 0)
   {
     job->state = FG;
@@ -347,7 +362,8 @@ void waitfg(pid_t pid)
 
   if (job == NULL)
     return;
-  else if (job->state == FG)
+
+  while (job->state == FG)
     sleep(1);
 
   return;
@@ -369,7 +385,7 @@ void sigchld_handler(int sig)
   pid_t pid;
   int status;
 
-  while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
+  while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0)
   {
     struct job_t *job;
 
@@ -382,6 +398,7 @@ void sigchld_handler(int sig)
     else if (WIFSTOPPED(status))
       job->state = ST;
   }
+
   return;
 }
 
@@ -395,6 +412,10 @@ void sigint_handler(int sig)
   pid_t pid;
 
   pid = fgpid(jobs);
+
+  if (pid == 0)
+    return;
+
   kill(-pid, SIGINT);
   printf("JOB [%d] (%d) terminated by signal 2\n", pid2jid(pid), pid);
 
@@ -411,8 +432,13 @@ void sigtstp_handler(int sig)
   pid_t pid;
 
   pid = fgpid(jobs);
+
+  if (pid == 0)
+    return;
+
   kill(-pid, SIGTSTP);
-  printf("JOB [%d] (%d) terminated by signal 20\n", pid2jid(pid), pid);
+  printf("JOB [%d] (%d) stopped by signal 20\n", pid2jid(pid), pid);
+
   return;
 }
 
@@ -472,7 +498,7 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
         nextjid = 1;
       strcpy(jobs[i].cmdline, cmdline);
       if(verbose)
-        printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
+        printf("Added job [%d] %d %s", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
 
       return 1;
     }
