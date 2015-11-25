@@ -4,8 +4,8 @@
  *
  * tsh - A tiny shell program with job control
  *
- * Name: <fill in>
- * Student id: <fill in>
+ * Name: Lee Eunha
+ * Student id: 2013-11422
  *
  */
 #include <stdio.h>
@@ -48,10 +48,10 @@ int nextjid = 1;            /* next job ID to allocate */
 char sbuf[MAXLINE];         /* for composing sprintf messages */
 
 struct job_t {              /* The job struct */
-  pid_t pid;              /* job PID */
-  int jid;                /* job ID [1, 2, ...] */
-  int state;              /* UNDEF, BG, FG, or ST */
-  char cmdline[MAXLINE];  /* command line */
+  pid_t pid;                /* job PID */
+  int jid;                  /* job ID [1, 2, ...] */
+  int state;                /* UNDEF, BG, FG, or ST */
+  char cmdline[MAXLINE];    /* command line */
 };
 struct job_t jobs[MAXJOBS]; /* The job list */
 /* End global variables */
@@ -139,16 +139,19 @@ int main(int argc, char **argv)
   initjobs(jobs);
 
   /* Execute the shell's read/eval loop */
-  while (1) {
+  while (1)
+  {
 
     /* Read command line */
-    if (emit_prompt) {
+    if (emit_prompt)
+    {
       printf("%s", prompt);
       fflush(stdout);
     }
     if ((fgets(cmdline, MAXLINE, stdin) == NULL) && ferror(stdin))
       app_error("fgets error");
-    if (feof(stdin)) { /* End of file (ctrl-d) */
+    if (feof(stdin))
+    { /* End of file (ctrl-d) */
       fflush(stdout);
       exit(0);
     }
@@ -175,6 +178,37 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline)
 {
+  char *argv[MAXARGS];
+  char buf[MAXLINE];
+  int bg;
+  pid_t pid;
+
+  strcpy(buf, cmdline);
+  bg = parseline(buf, argv);
+  if (argv[0] == NULL)
+    return;
+
+  if (!builtin_command(argv))
+  {
+    if ((pid = Fork()) == 0)
+    {
+      if (execve(argv[0], argv, environ) < 0)
+      {
+        printf("%s: Command not found.\n", argv[0]);
+        exit(0);
+      }
+    }
+
+    if (bg == 0)
+    {
+      int status;
+      if (waitpid(pid, &status, 0) < 0)
+        unix_error("waitfg: waitpid error");
+    }
+    else
+      printf("%d %s", pid, cmdline);
+  }
+
   return;
 }
 
@@ -200,28 +234,29 @@ int parseline(const char *cmdline, char **argv)
 
   /* Build the argv list */
   argc = 0;
-  if (*buf == '\'') {
+  if (*buf == '\'')
+  {
     buf++;
     delim = strchr(buf, '\'');
   }
-  else {
+  else
     delim = strchr(buf, ' ');
-  }
 
-  while (delim) {
+  while (delim)
+  {
     argv[argc++] = buf;
     *delim = '\0';
     buf = delim + 1;
     while (*buf && (*buf == ' ')) /* ignore spaces */
       buf++;
 
-    if (*buf == '\'') {
+    if (*buf == '\'')
+    {
       buf++;
       delim = strchr(buf, '\'');
     }
-    else {
+    else
       delim = strchr(buf, ' ');
-    }
   }
   argv[argc] = NULL;
 
@@ -229,9 +264,8 @@ int parseline(const char *cmdline, char **argv)
     return 1;
 
   /* should the job run in the background? */
-  if ((bg = (*argv[argc-1] == '&')) != 0) {
+  if ((bg = (*argv[argc-1] == '&')) != 0)
     argv[--argc] = NULL;
-  }
   return bg;
 }
 
@@ -241,7 +275,27 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv)
 {
+  if (strcmp(argv[0], "quit") == 0)
+    exit(0);
+  else if (strcmp(argv[0], "jobs") == 0)
+    listjobs(jobs);
+  else if (strcmp(argv[0], "bg") == 0 || strcmp(argv[0], "fg") == 0)
+    do_bgfg(argv);
+  else if (strcmp(argv[0], "&") == 0)
+    return 1;
+
   return 0;     /* not a builtin command */
+}
+
+int powthem(int a, int b)
+{
+  int i;
+  int result = 1;
+
+  for (i = 0; i < b; i++)
+    result *= a;
+
+  return result;
 }
 
 /*
@@ -249,6 +303,40 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv)
 {
+  int i;
+  int len;
+  int jid = 0;
+  int pid = 0;
+  char *idc;
+
+  if (argv[1][0] == '%')
+  {
+    strcpy(idc, argv[1]);
+    len = strlen(idc);
+    len--;
+    
+    for (i = 0; i < len; i++)
+      jid += powthem((idc[len - i] - '0'), i);
+
+    pid = getjobjid(jobs, jid)->pid;
+  }
+  else
+  {
+    strcpy(idc, argv[1]);
+    len = strlen(idc);
+
+    for (i = 0; i < len; i++)
+      pid += powthem((idc[len - i - 1] - '0'), i);
+  }
+
+  KILL(pid, SIGCONT);
+
+  if (strcmp(argv[0], "bg") == 0)
+    getjobpid(jobs, pid)->state = BG;
+  else if (strcmp(argv[0], "fg") == 0)
+    getjobpid(jobs, pid)->state = FG;
+
+  waitpid(pid, NULL, 0);
   return;
 }
 
@@ -257,6 +345,10 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+  int status;
+
+  waitpid(pid, &status, 0);
+
   return;
 }
 
@@ -283,6 +375,7 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig)
 {
+  KILL(fgpid(jobs), SIGINT);
   return;
 }
 
@@ -293,6 +386,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig)
 {
+  KILL(fgpid(jobs), SIGTSTP);
   return;
 }
 
@@ -305,7 +399,8 @@ void sigtstp_handler(int sig)
  **********************************************/
 
 /* clearjob - Clear the entries in a job struct */
-void clearjob(struct job_t *job) {
+void clearjob(struct job_t *job)
+{
   job->pid = 0;
   job->jid = 0;
   job->state = UNDEF;
@@ -313,7 +408,8 @@ void clearjob(struct job_t *job) {
 }
 
 /* initjobs - Initialize the job list */
-void initjobs(struct job_t *jobs) {
+void initjobs(struct job_t *jobs)
+{
   int i;
 
   for (i = 0; i < MAXJOBS; i++)
@@ -339,17 +435,19 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
   if (pid < 1)
     return 0;
 
-  for (i = 0; i < MAXJOBS; i++) {
-    if (jobs[i].pid == 0) {
+  for (i = 0; i < MAXJOBS; i++)
+  {
+    if (jobs[i].pid == 0)
+    {
       jobs[i].pid = pid;
       jobs[i].state = state;
       jobs[i].jid = nextjid++;
       if (nextjid > MAXJOBS)
         nextjid = 1;
       strcpy(jobs[i].cmdline, cmdline);
-      if(verbose){
+      if(verbose)
         printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
-      }
+
       return 1;
     }
   }
@@ -376,7 +474,8 @@ int deletejob(struct job_t *jobs, pid_t pid)
 }
 
 /* fgpid - Return PID of current foreground job, 0 if no such job */
-pid_t fgpid(struct job_t *jobs) {
+pid_t fgpid(struct job_t *jobs)
+{
   int i;
 
   for (i = 0; i < MAXJOBS; i++)
@@ -386,7 +485,8 @@ pid_t fgpid(struct job_t *jobs) {
 }
 
 /* getjobpid  - Find a job (by PID) on the job list */
-struct job_t *getjobpid(struct job_t *jobs, pid_t pid) {
+struct job_t *getjobpid(struct job_t *jobs, pid_t pid)
+{
   int i;
 
   if (pid < 1)
