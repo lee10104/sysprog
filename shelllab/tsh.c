@@ -202,7 +202,7 @@ void eval(char *cmdline)
 
       if (execve(argv[0], argv, environ) < 0)
       {
-        printf("%s: Command not found.\n", argv[0]);
+        printf("%s: Command not found\n", argv[0]);
         exit(0);
       }
     }
@@ -317,7 +317,11 @@ void do_bgfg(char **argv)
 
   if (!argv[1])
   {
-    printf("jobs not found\n");
+    if (strcmp(argv[0], "bg") == 0)
+      printf("bg command requires PID or %%jobid argument\n");
+    else
+      printf("fg command requires PID or %%jobid argument\n");
+
     return;
   }
 
@@ -325,6 +329,7 @@ void do_bgfg(char **argv)
   {
     argv[1][0] = ' ';
     jid = atoi(argv[1]);
+    argv[1][0] = '%';
     pid = getjobjid(jobs, jid)->pid;
   }
   else
@@ -333,7 +338,13 @@ void do_bgfg(char **argv)
   job = getjobpid(jobs, pid);
   
   if (job == NULL)
+  {
+    if (argv[1][0] == '%')
+      printf("%s: No such job\n", argv[1]);
+    else
+      printf("(%d): No such process\n", pid); 
     return;
+  }
 
   kill(-pid, SIGCONT);
 
