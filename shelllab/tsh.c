@@ -188,13 +188,13 @@ void eval(char *cmdline)
   isbg = parseline(buf, argv);
   if (argv[0] == NULL)
     return;
-
-  sigemptyset(&sigset);
-  sigaddset(&sigset, SIGCHLD);
-  sigprocmask(SIG_BLOCK, &sigset, NULL);
-  
+ 
   if (!builtin_cmd(argv))
   {
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGCHLD);
+    sigprocmask(SIG_BLOCK, &sigset, NULL);
+ 
     if ((pid = fork()) == 0)
     {
       setpgid(0, 0);
@@ -330,12 +330,12 @@ void do_bgfg(char **argv)
   else
     pid = atoi(argv[1]);
 
-  kill(-pid, SIGCONT);
-
   job = getjobpid(jobs, pid);
   
   if (job == NULL)
     return;
+
+  kill(-pid, SIGCONT);
 
   if (strcmp(argv[0], "bg") == 0)
   {
@@ -364,7 +364,7 @@ void waitfg(pid_t pid)
     return;
 
   while (job->state == FG)
-    sleep(1);
+    sleep(0);
 
   return;
 }
@@ -394,9 +394,15 @@ void sigchld_handler(int sig)
     if (WIFEXITED(status))
       deletejob(jobs, pid);
     else if (WIFSIGNALED(status))
+    {
+      printf("Job [%d] (%d) terminated by signal 2\n", pid2jid(pid), pid);
       deletejob(jobs, pid);
+    }
     else if (WIFSTOPPED(status))
+    {
+      printf("Job [%d] (%d) stopped by signal 20\n", pid2jid(pid), pid);
       job->state = ST;
+    }
   }
 
   return;
@@ -417,7 +423,6 @@ void sigint_handler(int sig)
     return;
 
   kill(-pid, SIGINT);
-  printf("JOB [%d] (%d) terminated by signal 2\n", pid2jid(pid), pid);
 
   return;
 }
@@ -437,7 +442,6 @@ void sigtstp_handler(int sig)
     return;
 
   kill(-pid, SIGTSTP);
-  printf("JOB [%d] (%d) stopped by signal 20\n", pid2jid(pid), pid);
 
   return;
 }
