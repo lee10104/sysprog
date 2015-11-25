@@ -326,24 +326,43 @@ void do_bgfg(char **argv)
   }
 
   if (argv[1][0] == '%')
-  {
     argv[1][0] = ' ';
+
+  if (atoi(argv[1]) == 0)
+  {
+    if (strcmp(argv[0], "bg") == 0)
+      printf("bg: argument must be a PID or %%jobid\n");
+    else
+      printf("fg: argument must be a PID or %%jobid\n");
+
+    return;
+  }
+
+  if (argv[1][0] == ' ')
+  {
     jid = atoi(argv[1]);
     argv[1][0] = '%';
+
+    job = getjobjid(jobs, jid);
+
+    if (job == NULL)
+    {
+      printf("%s: No such job\n", argv[1]);
+      return;
+    }
+
     pid = getjobjid(jobs, jid)->pid;
   }
   else
-    pid = atoi(argv[1]);
-
-  job = getjobpid(jobs, pid);
-  
-  if (job == NULL)
   {
-    if (argv[1][0] == '%')
-      printf("%s: No such job\n", argv[1]);
-    else
-      printf("(%d): No such process\n", pid); 
-    return;
+    pid = atoi(argv[1]);
+    job = getjobpid(jobs, pid);
+
+    if (job == NULL)
+    {
+      printf("(%d): No such process\n", pid);
+      return;
+    }
   }
 
   kill(-pid, SIGCONT);
