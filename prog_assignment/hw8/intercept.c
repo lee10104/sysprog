@@ -13,6 +13,9 @@
 // 20151104   hochan      created
 // 20151105   bernhard    clean-up
 //
+// Name:       Eunha Lee
+// Student-ID: 2013-11422
+//
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -28,9 +31,18 @@ FILE *fopen(const char *path, const char *mode)
   // 2) print information about opened file (path, mode)
   // 3) call original function and return result
 
-  // remove these two lines with your own code
-  errno = ENOSYS;
-  return NULL;
+  FILE *fp;
+
+  static FILE *(*sp_fopen)(const char *, const char *) = NULL;
+
+  if (sp_fopen == 0)
+    sp_fopen = dlsym(RTLD_NEXT, "fopen");
+
+  printf(">>> intercept: fopen(\"%s\", \"%s\") <<<\n", path, mode);
+
+  fp = sp_fopen(path, mode);
+
+  return fp;
 }
 
 int fclose(FILE *stream)
@@ -41,7 +53,12 @@ int fclose(FILE *stream)
   // 2) print that a file has been closed
   // 3) call original function and return result
 
-  // remove these two lines with your own code
-  errno = ENOSYS;
-  return EOF;
+  static int (*sp_fclose)(FILE *) = NULL;
+
+  if (!sp_fclose)
+    sp_fclose = dlsym(RTLD_NEXT, "fclose");
+
+  printf(">>> intercept: fclose() <<<\n");
+
+  return sp_fclose(stream);
 }

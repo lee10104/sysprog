@@ -38,6 +38,21 @@ int main(int argc, char *argv[])
   // 2. open directory specified on command line
   //
 
+  int out = open(MANIFEST_FILE, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+  if (out == -1)
+  {
+    perror("manifest error");
+    exit(EXIT_FAILURE);
+  }
+
+  DIR *dir = opendir(argv[1]);
+  if (dir == NULL)
+  {
+    fprintf(stderr, "directory %s open fail", argv[1]);
+    perror(NULL);
+    exit(EXIT_FAILURE);
+  }
+
   // TODO
   //
   // iterate through each entry in directory and compute the md5sum for each 
@@ -57,11 +72,58 @@ int main(int argc, char *argv[])
   // 2. check return status, printing error if necessary
   //
 
+  struct dirent *entry;
+  while ((entry = readdir(dir)) != NULL)
+  {
+    if (((entry->d_type & DT_REG) != DT_REG) || (strcmp(entry->d_name, MANIFEST_FILE) == 0))
+      continue;
+
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+      if (chdir(argv[1]) == -1)
+      {
+        perror("directory change error");
+        exit(EXIT_FAILURE);
+      }
+
+      if (dup2(out, STDOUT_FILENO) != STDOUT_FILENO)
+      {
+        perror("duplicate error");
+        exit(EXIT_FAILURE);
+      }
+
+      char *args[3];
+      args[0] = strdup("md5sum");
+      args[1] = strdup(entry->d_name);
+      args[2] = NULL;
+
+      execvp(args[0], args);
+
+      perror("md5sum error");
+      exit(EXIT_FAILURE);
+    }
+    else
+    {
+      int status;
+      if (waitpid(pid, &status, 0) == -1)
+        perror("child process error");
+      else
+      {
+        if (!WIFEXITED(status) || (WEXITSTATUS(status) != 0))
+          fprintf(stderr, "child exit error\n");
+      }
+    }
+  }
+
   // TODO
   //
   // close directory and manifest file, then exit
 
-
+  if (closedir(dir) == -1)
+    perror("directory close error");
+  if (close(out) == -1)
+    perror("manifest file close error");
 
   fprintf(stdout, "%s created.\n", MANIFEST_FILE);
 

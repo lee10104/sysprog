@@ -5,8 +5,8 @@
 //
 // Copying files using a user buffer and mmap.
 //
-// Name:       Firstname Lastname
-// Student-ID: XXXX-XXXXX
+// Name:       Eunha Lee
+// Student-ID: 2013-11422
 //
 
 #include <stdio.h>
@@ -19,6 +19,7 @@
 
 #define M_BUFFER 1
 #define M_MMAP   2
+#define BUFSIZE  1<<20
 
 int copy_buffer(int in, int out)
 {
@@ -39,6 +40,33 @@ int copy_buffer(int in, int out)
   // to stderr using fprintf (as done below in main) and return 
   // EXIT_FAILURE
 
+  void *buf;
+  ssize_t r, w;
+
+  buf = malloc(BUFSIZE);
+  if (buf == NULL)
+  {
+    perror("buf == NULL");
+    return EXIT_FAILURE;
+  }
+  
+  while ((r = read(in, buf, BUFSIZE)) > 0)
+  {
+    w = write(out, buf, r);
+    if (w != r)
+    {
+      perror("write fail");
+      return EXIT_FAILURE;
+    }
+  }
+
+  if (r != 0)
+  {
+    perror("read fail");
+    return EXIT_FAILURE;
+  }
+
+  free(buf);
 
   return EXIT_SUCCESS;
 }
@@ -58,6 +86,41 @@ int copy_mmap(int in, int out)
   // to stderr using fprintf (as done below in main) and return 
   // EXIT_FAILURE
 
+  struct stat s;
+  void *buf;
+  ssize_t w;
+  
+  if (fstat(in, &s) < 0)
+  {
+    perror("size error");
+    return EXIT_FAILURE;
+  }
+
+  buf = mmap(NULL, s.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, in, 0);
+  if (buf == MAP_FAILED)
+  {
+    perror("map failed");
+    return EXIT_FAILURE;
+  }
+
+  w = write(out, buf, s.st_size);
+
+  if (w < 0)
+  {
+    perror("write error: zero");
+    return EXIT_FAILURE;
+  }
+  else if (w < s.st_size)
+  {
+    fprintf(stderr, "write error: less");
+    return EXIT_FAILURE;
+  }
+
+  if (munmap(buf, s.st_size) == -1)
+  {
+    perror("unmap error");
+    return EXIT_FAILURE;
+  }
 
   return EXIT_SUCCESS;
 }
